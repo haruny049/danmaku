@@ -1,0 +1,355 @@
+ <!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" >
+　<meta name="viewport" content="width=device-width, initial-scale=1.0">
+　<meta name="google-site-verification" content="YDDILU3u9itWpjE1NoBikDF8FYzWJlcE2uAnUmJ_334" />
+  <title>弾幕画像生成シミュレーター</title>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <style>
+    body {
+      background: #f7f7f7;
+      font-family: sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .controls {
+      margin: 20px;
+    }
+
+    .controls input, .controls select {
+      margin: 10px;
+      padding: 10px;
+      font-size: 1em;
+    }
+
+    #preview-container {
+      position: relative;
+      width: 600px;
+      height: 400px;
+      margin: 0 auto;
+      border: 2px solid #ccc;
+      overflow: hidden;
+      background: black;
+    }
+
+    #preview {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .comment {
+      position: absolute;
+      white-space: nowrap;
+      font-size: 20px;
+      font-weight: bold;
+      color: white;
+      text-shadow: 2px 2px 4px black;
+      animation: moveLeft linear;
+      pointer-events: none;
+    }
+
+    @keyframes moveLeft {
+      0% { left: 100%; }
+      100% { left: -100%; }
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 1em;
+      background-color: #4fc3f7;
+      color: black;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #81d4fa;
+    }
+
+    .bottom-buttons {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .comment-btn {
+      width: 100px;
+      height: 100px;
+      font-size: 16px;
+      border-radius: 12px;
+      background-color: #ffd54f;
+    }
+
+    .comment-btn:hover {
+      background-color: #ffe082;
+    }
+
+    .rate-btn {
+      width: 100px;
+      height: 40px;
+      font-size: 16px;
+      background-color: #4fc3f7;
+      color: white;
+      font-weight: bold;
+      border-radius: 10px;
+    }
+
+    .rate-btn:hover {
+      background-color: #81d4fa;
+    }
+
+    .label {
+      margin-top: 10px;
+      font-weight: bold;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <h1>弾幕画像生成シミュレーター</h1>
+
+  <div class="controls">
+    <input type="file" accept="image/*" id="imageUpload" />
+    <select id="filter">
+      <option value="none">フィルターなし</option>
+      <option value="blur(3px)">ぼかし</option>
+      <option value="brightness(1.5)">明るく</option>
+      <option value="grayscale(100%)">白黒</option>
+    </select>
+    <button onclick="saveImageWithAd()">画像を保存</button>
+  </div>
+
+  <div id="preview-container">
+    <img id="preview" src="https://placekitten.com/600/400" alt="preview" />
+  </div>
+
+  <div class="bottom-buttons">
+    <!-- 弾幕内容切り替え -->
+    <button class="comment-btn" onclick="setCommentType('ww')">wwwww</button>
+    <button class="comment-btn" onclick="setCommentType('88')">拍手</button>
+    <button class="comment-btn" onclick="setCommentType('cute')">かわいい</button>
+
+    <!-- 弾幕量切り替え -->
+    <button class="rate-btn" onclick="setCommentRate(500, 1)">普通</button>
+    <button class="rate-btn" onclick="setCommentRate(100, 2)">多め</button>
+    <button class="rate-btn" onclick="setCommentRate(10, 4)">超多め</button>
+  </div>
+
+
+  <script>
+    const preview = document.getElementById('preview');
+    const container = document.getElementById('preview-container');
+    const filterSelect = document.getElementById('filter');
+
+    // 弾幕内容セット
+    const commentSets = {
+      ww: ["草", "草www", "wwwww", "これは草", "ｗｗｗｗ", "なんだこれwwww"],
+      88: ["8888", "888888888", "8888888888", "うおおおおおおお！！！", "888888888888"],
+      cute: ["かわいい", "最高！！", "天使！", "かわいい！！！", "いいね！"]
+    };
+
+    let currentCommentSet = "ww";
+    let commentInterval = 500;
+    let commentMultiplier = 1;
+    let commentTimer;
+
+    document.getElementById('imageUpload').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        preview.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    filterSelect.addEventListener('change', () => {
+      preview.style.filter = filterSelect.value;
+    });
+
+    function setCommentType(type) {
+      currentCommentSet = type;
+    }
+
+    function setCommentRate(interval, multiplier) {
+      commentInterval = interval;
+      commentMultiplier = multiplier;
+      startDanmaku();
+    }
+
+    function createDanmaku(text) {
+      const el = document.createElement('div');
+      el.className = 'comment';
+      el.textContent = text;
+      const top = Math.random() * (container.clientHeight - 30);
+      const leftOffset = Math.random() * 200;
+      el.style.top = `${top}px`;
+      el.style.left = `${100 + leftOffset}%`;
+      el.style.animationDuration = (5 + Math.random() * 3) + 's';
+      container.appendChild(el);
+      setTimeout(() => el.remove(), 8000);
+    }
+
+    function startDanmaku() {
+      if (commentTimer) clearInterval(commentTimer);
+      commentTimer = setInterval(() => {
+        const texts = commentSets[currentCommentSet];
+        const text = texts[Math.floor(Math.random() * texts.length)];
+        createDanmaku(text);
+      }, commentInterval);
+    }
+
+    window.onload = startDanmaku;
+
+    function saveImage() {
+      // 一時的に弾幕を増やして保存
+      const texts = commentSets[currentCommentSet];
+      const tempComments = [];
+
+      for (let i = 0; i < 20 * commentMultiplier; i++) {
+        const text = texts[Math.floor(Math.random() * texts.length)];
+        const el = document.createElement('div');
+        el.className = 'comment';
+        el.textContent = text;
+        const top = Math.random() * (container.clientHeight - 30);
+        const left = Math.random() * (container.clientWidth - 100);
+        el.style.top = `${top}px`;
+        el.style.left = `${left}px`;
+        el.style.animation = 'none';
+        container.appendChild(el);
+        tempComments.push(el);
+      }
+
+      html2canvas(container, { useCORS: true }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'danmaku_image.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        // 一時的な弾幕を削除
+        tempComments.forEach(el => el.remove());
+      });
+    }
+  </script>
+
+
+  <!-- ▼ バナー広告（画面下に固定表示） ▼ -->
+  <div style="position: fixed; bottom: 0; width: 100%; z-index: 9999; background: #ffffff; text-align: center; padding: 4px 0; box-shadow: 0 -2px 5px rgba(0,0,0,0.1);">
+    <!-- admax -->
+    <script src="https://adm.shinobi.jp/s/65a2fe3956e4c7c81dacd3de325e35ef"></script>
+    <!-- admax -->
+  </div>
+　
+<!-- admax -->
+<script src="https://adm.shinobi.jp/s/cff2b1a051311a56d513c6097001aa26"></script>
+<!-- admax -->
+  <!-- 既存のコンテンツやスクリプト -->
+
+  <script>
+    function isSmartphone() {
+      return /iPhone|Android.+Mobile/.test(navigator.userAgent);
+    }
+
+    if (isSmartphone()) {
+      // スマホ版バナー広告のdiv作成
+      const bannerDiv = document.createElement('div');
+      bannerDiv.style.position = 'fixed';
+      bannerDiv.style.bottom = '0';
+      bannerDiv.style.width = '100%';
+      bannerDiv.style.zIndex = '9999';
+      bannerDiv.style.background = '#ffffff';
+      bannerDiv.style.textAlign = 'center';
+      bannerDiv.style.padding = '4px 0';
+      bannerDiv.style.boxShadow = '0 -2px 5px rgba(0,0,0,0.1)';
+
+      const bannerScript = document.createElement('script');
+      bannerScript.src = "https://adm.shinobi.jp/s/5b32c6897d3b1edd79cbe02cd2adb6a4";
+      bannerDiv.appendChild(bannerScript);
+
+      document.body.appendChild(bannerDiv);
+
+      // スマホ版インタースティシャル広告を自動表示
+      const interstitialScript = document.createElement('script');
+      interstitialScript.src = 'https://adm.shinobi.jp/s/689ef38b0824999358cea38288ac51f4';
+      document.body.appendChild(interstitialScript);
+    }
+  </script>
+
+  　<!-- ▼ シェアボタン表示用コンテナ ▼ -->
+<div id="twitter-share-container" style="margin-top: 20px; text-align: center; display: none;">
+  <a id="twitter-share-button"
+     href="#"
+     target="_blank"
+     rel="noopener noreferrer"
+     style="padding: 10px 20px; background: #1DA1F2; color: white; border-radius: 8px; text-decoration: none; font-weight: bold;">
+    X（旧Twitter）でシェアする
+  </a>
+</div>
+
+<script>
+  // スマホ判定
+  function isSmartphone() {
+    return /iPhone|Android.+Mobile/.test(navigator.userAgent);
+  }
+
+  // インタースティシャル広告表示後に画像保存を実行
+  function showInterstitialAd(callback) {
+    const script = document.createElement('script');
+    script.src = isSmartphone()
+      ? 'https://adm.shinobi.jp/s/689ef38b0824999358cea38288ac51f4'  // スマホ用
+      : 'https://adm.shinobi.jp/s/cff2b1a051311a56d513c6097001aa26'; // PC用
+    script.onload = () => {
+      setTimeout(callback, 2000); // 広告が表示されるまで待機（2秒）※必要に応じて調整
+    };
+    document.body.appendChild(script);
+  }
+
+  // ユーザーが押す保存処理（インタースティシャル付き）
+  function saveImageWithAd() {
+    showInterstitialAd(saveImage);
+  }
+
+  // 画像保存 → シェアボタン表示
+  function saveImage() {
+    const texts = commentSets[currentCommentSet];
+    const tempComments = [];
+
+    for (let i = 0; i < 20 * commentMultiplier; i++) {
+      const text = texts[Math.floor(Math.random() * texts.length)];
+      const el = document.createElement('div');
+      el.className = 'comment';
+      el.textContent = text;
+      const top = Math.random() * (container.clientHeight - 30);
+      const left = Math.random() * (container.clientWidth - 100);
+      el.style.top = `${top}px`;
+      el.style.left = `${left}px`;
+      el.style.animation = 'none';
+      container.appendChild(el);
+      tempComments.push(el);
+    }
+
+    html2canvas(container, { useCORS: true }).then(canvas => {
+      const link = document.createElement('a');
+      link.download = 'danmaku_image.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      tempComments.forEach(el => el.remove());
+
+      // ▼ シェアボタン表示設定 ▼
+      const shareContainer = document.getElementById('twitter-share-container');
+      const shareButton = document.getElementById('twitter-share-button');
+      shareButton.href = `https://twitter.com/intent/tweet?text=弾幕画像を作ったよ！&url=https://example.com&hashtags=弾幕画像`;
+      shareContainer.style.display = 'block';
+    });
+  }
+</script>
+
+</body>
+</html>
